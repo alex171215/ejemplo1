@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Observabilidad | CR7</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="observabilidad.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Panel de Observabilidad Local</h1>
+            <nav aria-label="Navegación del dashboard">
+                <a href="index.html" class="back-link">Volver al sitio</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container" id="main-content">
+        <section class="controls" aria-label="Controles del dashboard">
+            <button id="btn-refresh" class="btn">Actualizar Datos</button>
+            <button id="btn-demo" class="btn btn-secondary">Generar Demo</button>
+            <button id="btn-clear" class="btn btn-danger">Limpiar Almacenamiento</button>
+            <button id="btn-download" class="btn btn-success">Descargar JSON</button>
+        </section>
+
+        <section class="stats-overview" aria-label="Resumen de estadísticas">
+            <div class="stat-card">
+                <h2 id="total-events">0</h2>
+                <p>Eventos Registrados</p>
+            </div>
+            <div class="stat-card">
+                <h2 id="error-events">0</h2>
+                <p>Errores (JS/Recursos)</p>
+            </div>
+        </section>
+
+        <section class="logs-section" aria-label="Registro de eventos">
+            <h2>Registro Detallado</h2>
+            <div class="table-responsive" tabindex="0" role="region" aria-label="Tabla de eventos">
+                <table id="logs-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Fecha / Hora</th>
+                            <th scope="col">Tipo de Evento</th>
+                            <th scope="col">Detalles Técnicos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-body">
+                        <!-- Los logs se insertarán aquí dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script src="observabilidad.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tbody = document.getElementById('logs-body');
+            const totalEventsEl = document.getElementById('total-events');
+            const errorEventsEl = document.getElementById('error-events');
+
+            function renderLogs() {
+                const logs = window.CR7Observability.getSnapshot();
+                
+                totalEventsEl.textContent = logs.length;
+                errorEventsEl.textContent = logs.filter(l => l.type.includes('error') || l.type.includes('rejection')).length;
+
+                tbody.innerHTML = '';
+                
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center">No hay eventos registrados en localStorage.</td></tr>';
+                    return;
+                }
+
+                // Render in reverse chronological order
+                const reversedLogs = [...logs].reverse();
+                
+                reversedLogs.forEach(log => {
+                    const tr = document.createElement('tr');
+                    
+                    const tdTime = document.createElement('td');
+                    const date = new Date(log.timestamp);
+                    tdTime.textContent = isNaN(date) ? log.timestamp : date.toLocaleString('es-ES');
+                    
+                    const tdType = document.createElement('td');
+                    const badge = document.createElement('span');
+                    let badgeClass = 'badge-info';
+                    if (log.type.includes('error') || log.type.includes('rejection')) badgeClass = 'badge-error';
+                    if (log.type === 'user_click') badgeClass = 'badge-click';
+                    
+                    badge.className = `badge ${badgeClass}`;
+                    badge.textContent = log.type.replace(/_/g, ' ');
+                    tdType.appendChild(badge);
+                    
+                    const tdDetails = document.createElement('td');
+                    const pre = document.createElement('pre');
+                    pre.textContent = JSON.stringify(log.data, null, 2);
+                    tdDetails.appendChild(pre);
+                    
+                    tr.appendChild(tdTime);
+                    tr.appendChild(tdType);
+                    tr.appendChild(tdDetails);
+                    
+                    tbody.appendChild(tr);
+                });
+            }
+
+            document.getElementById('btn-refresh').addEventListener('click', renderLogs);
+            
+            document.getElementById('btn-demo').addEventListener('click', () => {
+                window.CR7Observability.generateDemoEvent();
+                renderLogs();
+            });
+
+            document.getElementById('btn-clear').addEventListener('click', () => {
+                if (confirm('¿Estás seguro de que deseas limpiar todos los registros?')) {
+                    window.CR7Observability.clear();
+                    renderLogs();
+                }
+            });
+
+            document.getElementById('btn-download').addEventListener('click', () => {
+                const logs = window.CR7Observability.getSnapshot();
+                const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `cr7-observability-snapshot-${new Date().getTime()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            // Initial render
+            renderLogs();
+        });
+    </script>
+</body>
+</html>
